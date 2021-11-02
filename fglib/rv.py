@@ -208,6 +208,7 @@ class Discrete(RandomVariable):
             A new discrete random variable representing the multiplication.
 
         """
+
         # Verify dimensions of multiplicand and multiplier.
         if len(self.dim) < len(other.dim):
             self._expand(other.dim, other.pmf.shape)
@@ -273,11 +274,12 @@ class Discrete(RandomVariable):
             dims: List of discrete random variables.
 
         """
+        # print('I''m in _expand' )
         reps = [1, ] * len(dims)
 
         # Extract missing dimensions
         diff = [i for i, d in enumerate(dims) if d not in self.dim]
-
+        # print('state:', states)
         # Expand missing dimensions
         for d in diff:
             self._pmf = np.expand_dims(self.pmf, axis=d)
@@ -421,6 +423,8 @@ class Gaussian(RandomVariable):
         else:
             self._dim = args
 
+        self.form = 'cov'  # initiate as covariance form
+
     @classmethod
     def unity(cls, *args):
         """Initialize unit element of a Gaussian random variable.
@@ -462,6 +466,7 @@ class Gaussian(RandomVariable):
         g = cls(None, None, *args)
         g._W = np.asarray(raw_W, dtype=np.float64)
         g._Wm = np.asarray(raw_Wm, dtype=np.float64)
+        g.form = 'inf'  # information form
         return g
 
     @property
@@ -520,6 +525,119 @@ class Gaussian(RandomVariable):
             A new Gaussian random variable representing the multiplication.
 
         """
+        # Verify dimensions of multiplicand and multiplier.
+        dimCheck = 0
+        counter = 0
+        dimList = []
+        # print('other:', other._W)
+        # print('self:', self._W)
+        # print('in mul:')
+        # print('in other, not in self:')
+        # for d in (set(other.dim)-set(self.dim)):
+        #     print(d)
+        #
+        # print('in self, not in other:')
+        # for d in (set(self.dim)-set(other.dim)):
+        #     print(d)
+
+        dimCheck = len(set(self.dim)-set(other.dim))>0 and len(set(other.dim)-set(self.dim))>0
+        # print(dimCheck)
+        if dimCheck:    # factors not over the same set of variables
+            if len(self.dim) < len(other.dim):   # 1. expand self
+                # print('self<other'  )
+                for d in other.dim:
+                # print(d)
+                    if d not in self.dim:
+                    # print('in dim check')
+                    # print(d)
+                        dimList.append(d)
+                        # dimCheck = 1
+                        counter+=1
+
+                W_tmp = np.zeros((self._W.shape[0]+counter, self._W.shape[1]+counter))
+                Wm_tmp = np.zeros((self._W.shape[0]+counter,1))
+
+                W_tmp[0:len(self.dim),0:len(self.dim)] = self._W
+                Wm_tmp[0:len(self.dim),0:1] = self._Wm
+
+
+                self._W = W_tmp
+                self._Wm = Wm_tmp
+                # print('self:', self._W)
+                # for d in range(len(dimList)):
+                self._dim = (self.dim + tuple(dimList))
+                # 2. expand other:
+                other._expand(self.dim,self._W.shape)
+                # print('other:',other._W)
+            else:    # 1. expand other
+                # print('self>=other'  )
+                for d in self.dim:
+                # print(d)
+                    if d not in other.dim:
+                    # print('in dim check')
+                    # print(d)
+                        dimList.append(d)
+                        # dimCheck = 1
+                        counter+=1
+
+                W_tmp = np.zeros((other._W.shape[0]+counter, other._W.shape[1]+counter))
+                Wm_tmp = np.zeros((other._W.shape[0]+counter,1))
+
+                W_tmp[0:len(other.dim),0:len(other.dim)] = other._W
+                Wm_tmp[0:len(other.dim),0:1] = other._Wm
+
+
+                other._W = W_tmp
+                other._Wm = Wm_tmp
+                # print('other:',other._W)
+                # for d in range(len(dimList)):
+                other._dim = (other.dim + tuple(dimList))
+                # 2. expand self:
+                self._expand(other.dim,other._W.shape)
+                # print('self:', self._W)
+
+
+
+        elif len(self.dim) < len(other.dim):
+            # print('self<other'  )
+            self._expand(other.dim, other._W.shape)
+        elif len(self.dim) > len(other.dim):
+            # print('self>other'  )
+            other._expand(self.dim, self._W.shape)
+        # check if dims are over the same variables
+        elif (not list(self.dim)==list(other.dim)): # check if dim order is the same
+            selfDims = enumerate(self.dim)
+            otherDims = enumerate(other.dim)
+            selfDict = dict()
+            otherDict = dict()
+
+            W_tmp=np.zeros(self._W.shape)
+            Wm_tmp=np.zeros(self._Wm.shape)
+
+            for count, item in selfDims:
+                try:
+                    selfDict[item].append(count)
+                except:
+                    selfDict[item] = [count]
+            for count, item in otherDims:
+                try:
+                    otherDict[item].append(count)
+                except:
+                    otherDict[item] = [count]
+            # set other to be in the same order of dimensions as self:
+            for var in selfDict:
+                Wm_tmp[selfDict[var][0]:selfDict[var][1]+1] = other._Wm[otherDict[var][0]:otherDict[var][1]+1]
+                W_tmp[selfDict[var][0]:selfDict[var][1]+1,selfDict[var][0]:selfDict[var][1]+1]   \
+                     = other._W[otherDict[var][0]:otherDict[var][1]+1,otherDict[var][0]:otherDict[var][1]+1]
+
+                for var2 in selfDict:
+                    if var2 != var:   # taking care of off-block-diagonals
+                        W_tmp[selfDict[var2][0]:selfDict[var2][1]+1,selfDict[var][0]:selfDict[var][1]+1]   \
+                            = other._W[selfDict[var2][0]:selfDict[var2][1]+1,selfDict[var][0]:selfDict[var][1]+1]
+
+            other._W = W_tmp
+            other._Wm = Wm_tmp
+
         W = self._W + other._W
         Wm = self._Wm + other._Wm
         return Gaussian.inf_form(W, Wm, *self.dim)
@@ -571,6 +689,84 @@ class Gaussian(RandomVariable):
         return np.allclose(self._W, other._W) \
             and np.allclose(self._Wm, other._Wm) \
             and self.dim == other.dim
+    def _expand(self, dims, states):
+        """Expand dimensions.
+
+        Expand the Gaussian random variable along the given new dimensions.
+
+        Args:
+            dims: List of Gaussian random variables.
+
+        """
+
+        W_tmp = np.zeros(states)
+        Wm_tmp = np.zeros((states[0],1))
+
+        diff = [i for i, d in enumerate(dims) if d not in self.dim]
+        # print('diff:', diff)
+        # print(len(self.dim))
+
+        if len(diff) > 0:
+        # dimensions we already have
+            bigDims = [(i, d) for i, d in enumerate(dims) if d in self.dim]   #  the matrix we want to expand to
+            # smallDims = [(i, d) for i, d in enumerate(self.dim) ]   # the matrix we want to expand
+            smallDims = enumerate(self.dim)
+            bigDict = dict()
+            smallDict = dict()
+            for count, item in bigDims:
+                try:
+                    # print(count, item)
+                    bigDict[item].append(count)
+                except:
+                    # print('here')
+                    bigDict[item] = [count]
+
+            for count, item in smallDims:
+                try:
+                    # print(count, item)
+                    smallDict[item].append(count)
+                except:
+                    # print('here')
+                    smallDict[item] = [count]
+
+            for var in bigDict:
+                try:
+                    Wm_tmp[bigDict[var][0]:bigDict[var][1]+1] = self._Wm[smallDict[var][0]:smallDict[var][1]+1]
+                    W_tmp[bigDict[var][0]:bigDict[var][1]+1,bigDict[var][0]:bigDict[var][1]+1]   \
+                        = self._W[smallDict[var][0]:smallDict[var][1]+1,smallDict[var][0]:smallDict[var][1]+1]
+
+                    for var2 in bigDict:
+                        if var2 != var:   # taking care of off-block-diagonals
+                            W_tmp[bigDict[var2][0]:bigDict[var2][1]+1,bigDict[var][0]:bigDict[var][1]+1]   \
+                                = self._W[smallDict[var2][0]:smallDict[var2][1]+1,smallDict[var][0]:smallDict[var][1]+1]
+
+
+                except:
+
+                    for i in range(len(smallDict[var]) , self._W.shape[0]):
+                        smallDict[var].append(smallDict[var][-1]+1)
+
+
+
+
+                    Wm_tmp[bigDict[var][0]:bigDict[var][-1]+1] = self._Wm[smallDict[var][0]:smallDict[var][-1]+1]
+                    W_tmp[bigDict[var][0]:bigDict[var][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
+                        = self._W[smallDict[var][0]:smallDict[var][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
+
+                    for var2 in bigDict:
+                        if var2 != var:   # taking care of off-block-diagonals
+                            W_tmp[bigDict[var2][0]:bigDict[var2][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
+                                = self._W[smallDict[var2][0]:smallDict[var2][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
+
+
+            self._dim = dims
+            self._Wm = Wm_tmp
+            self._W = W_tmp
+       # else:
+          #  self._dim = dims
+          #  self._Wm = Wm_tmp
+          #  self._W = W_tmp
+
 
     def normalize(self):
         """Normalize probability density function."""
@@ -592,12 +788,53 @@ class Gaussian(RandomVariable):
             A new Gaussian random variable representing the marginal.
 
         """
-        axis = tuple(idx for idx, d in enumerate(self.dim) if d not in dims)
-        mean = self.mean[np.ix_(axis, [0])]
-        cov = self.cov[np.ix_(axis, axis)]
 
+        axis = tuple(idx for idx, d in enumerate(self.dim) if d not in dims)
         new_dims = tuple(d for d in self.dim if d not in dims)
-        return Gaussian(mean, cov, *new_dims)
+        if self.form != 'inf':
+
+            mean = self.mean[np.ix_(axis, [0])]
+            cov = self.cov[np.ix_(axis, axis)]
+
+            return Gaussian(mean, cov, *new_dims)
+
+        else:
+            axis2 = tuple(idx for idx, d in enumerate(self.dim) if d in dims)
+            axisDict = {'keep': axis, 'remove' : axis2}
+
+            infVec, infMat = self.i_marginalize(axisDict)
+
+            return Gaussian.inf_form(infMat, infVec , *new_dims)
+
+
+
+
+
+    def i_marginalize(self, axisDict):
+        """Return the marginal for given dimensions.
+
+        The probability density function of the Gaussian random variable
+        is marginalized along the given dimensions.
+        works in information form
+
+        Args:
+            *dims: Instances of Gaussian random variables, which should be
+                marginalized out.
+            normalize: Boolean flag if probability mass function should be
+                normalized after marginalization.
+
+        Returns:
+            A new Gaussian random variable representing the marginal.
+
+        """
+        axis1 = axisDict['keep']
+        axis2 = axisDict['remove']
+
+        infMat = self._W[np.ix_(axis1, axis1)]-np.dot(self._W[np.ix_(axis1, axis2)], np.dot(np.linalg.inv(self._W[np.ix_(axis2, axis2)]), self._W[np.ix_(axis2, axis1)]))
+        infVec = self._Wm[np.ix_(axis1, [0])]-np.dot(self._W[np.ix_(axis1, axis2)], np.dot(np.linalg.inv(self._W[np.ix_(axis2, axis2)]), self._Wm[np.ix_(axis2, [0])]))
+
+
+        return infVec, infMat
 
     def maximize(self, *dims):
         """Return the maximum for given dimensions.

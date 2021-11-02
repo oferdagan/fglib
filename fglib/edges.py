@@ -49,4 +49,6 @@ class Edge:
 
     def get_message(self, snode, tnode):
         """Return value of message from source node to target node."""
+        # print('from:', snode, 'to', tnode)
+
         return self.message[self.index[snode]][self.index[tnode]]

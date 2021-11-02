@@ -265,10 +265,12 @@ class FNode(Node):
 
         # Product over incoming messages
         for n in self.neighbors(tnode):
+            
             msg *= self.graph[n][self]['object'].get_message(n, self)
 
         # Integration/Summation over incoming variables
         for n in self.neighbors(tnode):
+
             msg = msg.marginalize(n, normalize=False)
 
         return msg
