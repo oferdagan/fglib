@@ -568,6 +568,8 @@ class Gaussian(RandomVariable):
                 self._dim = (self.dim + tuple(dimList))
                 # 2. expand other:
                 other._expand(self.dim,self._W.shape)
+
+                dimList = self._dim
                 # print('other:',other._W)
             else:    # 1. expand other
                 # print('self>=other'  )
@@ -601,9 +603,11 @@ class Gaussian(RandomVariable):
         elif len(self.dim) < len(other.dim):
             # print('self<other'  )
             self._expand(other.dim, other._W.shape)
+            dimList = other.dim
         elif len(self.dim) > len(other.dim):
             # print('self>other'  )
             other._expand(self.dim, self._W.shape)
+            dimList=self.dim
         # check if dims are over the same variables
         elif (not list(self.dim)==list(other.dim)): # check if dim order is the same
             selfDims = enumerate(self.dim)
@@ -626,21 +630,24 @@ class Gaussian(RandomVariable):
                     otherDict[item] = [count]
             # set other to be in the same order of dimensions as self:
             for var in selfDict:
-                Wm_tmp[selfDict[var][0]:selfDict[var][1]+1] = other._Wm[otherDict[var][0]:otherDict[var][1]+1]
-                W_tmp[selfDict[var][0]:selfDict[var][1]+1,selfDict[var][0]:selfDict[var][1]+1]   \
-                     = other._W[otherDict[var][0]:otherDict[var][1]+1,otherDict[var][0]:otherDict[var][1]+1]
+                Wm_tmp[selfDict[var][0]:selfDict[var][-1]+1] = other._Wm[otherDict[var][0]:otherDict[var][-1]+1]
+                W_tmp[selfDict[var][0]:selfDict[var][-1]+1,selfDict[var][0]:selfDict[var][-1]+1]   \
+                     = other._W[otherDict[var][0]:otherDict[var][-1]+1,otherDict[var][0]:otherDict[var][-1]+1]
 
                 for var2 in selfDict:
                     if var2 != var:   # taking care of off-block-diagonals
-                        W_tmp[selfDict[var2][0]:selfDict[var2][1]+1,selfDict[var][0]:selfDict[var][1]+1]   \
-                            = other._W[selfDict[var2][0]:selfDict[var2][1]+1,selfDict[var][0]:selfDict[var][1]+1]
+                        W_tmp[selfDict[var2][0]:selfDict[var2][-1]+1,selfDict[var][0]:selfDict[var][-1]+1]   \
+                            = other._W[otherDict[var2][0]:otherDict[var2][-1]+1,otherDict[var][0]:otherDict[var][-1]+1]
 
             other._W = W_tmp
             other._Wm = Wm_tmp
+            dimList = self.dim
+        else:
+            dimList=self.dim
 
         W = self._W + other._W
         Wm = self._Wm + other._Wm
-        return Gaussian.inf_form(W, Wm, *self.dim)
+        return Gaussian.inf_form(W, Wm, *dimList)
 
     def __iadd__(self, other):
         """Method for augmented addition.
@@ -731,14 +738,14 @@ class Gaussian(RandomVariable):
 
             for var in bigDict:
                 try:
-                    Wm_tmp[bigDict[var][0]:bigDict[var][1]+1] = self._Wm[smallDict[var][0]:smallDict[var][1]+1]
-                    W_tmp[bigDict[var][0]:bigDict[var][1]+1,bigDict[var][0]:bigDict[var][1]+1]   \
-                        = self._W[smallDict[var][0]:smallDict[var][1]+1,smallDict[var][0]:smallDict[var][1]+1]
+                    Wm_tmp[bigDict[var][0]:bigDict[var][-1]+1] = self._Wm[smallDict[var][0]:smallDict[var][-1]+1]
+                    W_tmp[bigDict[var][0]:bigDict[var][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
+                        = self._W[smallDict[var][0]:smallDict[var][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
 
                     for var2 in bigDict:
                         if var2 != var:   # taking care of off-block-diagonals
-                            W_tmp[bigDict[var2][0]:bigDict[var2][1]+1,bigDict[var][0]:bigDict[var][1]+1]   \
-                                = self._W[smallDict[var2][0]:smallDict[var2][1]+1,smallDict[var][0]:smallDict[var][1]+1]
+                            W_tmp[bigDict[var2][0]:bigDict[var2][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
+                                = self._W[smallDict[var2][0]:smallDict[var2][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
 
 
                 except:
@@ -833,7 +840,8 @@ class Gaussian(RandomVariable):
         infMat = self._W[np.ix_(axis1, axis1)]-np.dot(self._W[np.ix_(axis1, axis2)], np.dot(np.linalg.inv(self._W[np.ix_(axis2, axis2)]), self._W[np.ix_(axis2, axis1)]))
         infVec = self._Wm[np.ix_(axis1, [0])]-np.dot(self._W[np.ix_(axis1, axis2)], np.dot(np.linalg.inv(self._W[np.ix_(axis2, axis2)]), self._Wm[np.ix_(axis2, [0])]))
 
-
+        # make sure matrix is symmetric:
+        infMat = (infMat+infMat.T)/2
         return infVec, infMat
 
     def maximize(self, *dims):
