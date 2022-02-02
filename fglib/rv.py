@@ -597,6 +597,7 @@ class Gaussian(RandomVariable):
                 # 2. expand self:
                 self._expand(other.dim,other._W.shape)
                 # print('self:', self._W)
+                dimList=other.dim
 
 
 
@@ -756,14 +757,14 @@ class Gaussian(RandomVariable):
 
 
 
-                    Wm_tmp[bigDict[var][0]:bigDict[var][-1]+1] = self._Wm[smallDict[var][0]:smallDict[var][-1]+1]
-                    W_tmp[bigDict[var][0]:bigDict[var][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
-                        = self._W[smallDict[var][0]:smallDict[var][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
+                    Wm_tmp[bigDict[var]] = self._Wm[smallDict[var][0]:smallDict[var][-1]+1]
+                    W_tmp[bigDict[var],bigDict[var]]   \
+                        = self._W[smallDict[var],smallDict[var]]
 
                     for var2 in bigDict:
                         if var2 != var:   # taking care of off-block-diagonals
-                            W_tmp[bigDict[var2][0]:bigDict[var2][-1]+1,bigDict[var][0]:bigDict[var][-1]+1]   \
-                                = self._W[smallDict[var2][0]:smallDict[var2][-1]+1,smallDict[var][0]:smallDict[var][-1]+1]
+                            W_tmp[bigDict[var2],bigDict[var]]   \
+                                = self._W[smallDict[var2],smallDict[var]]
 
 
             self._dim = dims
