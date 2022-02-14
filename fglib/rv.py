@@ -539,8 +539,10 @@ class Gaussian(RandomVariable):
         # print('in self, not in other:')
         # for d in (set(self.dim)-set(other.dim)):
         #     print(d)
-
+        # try:
         dimCheck = len(set(self.dim)-set(other.dim))>0 and len(set(other.dim)-set(self.dim))>0
+        # except:
+        #     return Gaussian.inf_form(self._W, self._Wm, *self.dim)
         # print(dimCheck)
         if dimCheck:    # factors not over the same set of variables
             if len(self.dim) < len(other.dim):   # 1. expand self
